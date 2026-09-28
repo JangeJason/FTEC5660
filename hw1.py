@@ -72,7 +72,6 @@ def build_chain() -> Any:
             temperature=0.0,
         )
     except (ImportError, Exception):
-        # 兼容备用方案：如果未安装 langchain-deepseek，走标准的 ChatOpenAI 接口调用 DeepSeek
         from langchain_openai import ChatOpenAI
         llm = ChatOpenAI(
             model="deepseek-v4-flash-vision-exp",
@@ -121,7 +120,6 @@ def answer_queries(chain: Any, images: list[Path]) -> dict[str, Any]:
         )
         batch_messages.append([message])
 
-    # 使用 batch 并行/批量处理所有小票图片
     results = chain.batch(batch_messages)
 
     total_paid = Decimal("0.00")
@@ -129,7 +127,6 @@ def answer_queries(chain: Any, images: list[Path]) -> dict[str, Any]:
 
     for i, res in enumerate(results):
         content = getattr(res, "content", str(res)).strip()
-        # 清理可能存在的 markdown 代码块标记 ```json ... ```
         if content.startswith("```"):
             content = re.sub(r"^```(?:json)?\s*", "", content)
             content = re.sub(r"\s*```$", "", content)
@@ -139,7 +136,6 @@ def answer_queries(chain: Any, images: list[Path]) -> dict[str, Any]:
             paid_val = Decimal(str(parsed.get("paid", 0))).quantize(Decimal("0.01"))
             undisc_val = Decimal(str(parsed.get("undiscounted", 0))).quantize(Decimal("0.01"))
         except Exception:
-            # 如果 json 解析失败，尝试正则提取数字容错
             amounts = re.findall(r"\d+(?:\.\d+)?", content)
             paid_val = Decimal(amounts[0]) if amounts else Decimal("0.00")
             undisc_val = Decimal(amounts[1]) if len(amounts) > 1 else paid_val
@@ -147,7 +143,6 @@ def answer_queries(chain: Any, images: list[Path]) -> dict[str, Any]:
         total_paid += paid_val
         total_undiscounted += undisc_val
 
-    # 必须保证最终返回的字符串只包含一个合法的金额数字，如 "HK$1974.30"
     return {
         QUERY_1: f"HK${total_paid:.2f}",
         QUERY_2: f"HK${total_undiscounted:.2f}",

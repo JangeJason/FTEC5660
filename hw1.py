@@ -63,7 +63,24 @@ def build_chain() -> Any:
     ``deepseek-v4-flash-vision-exp``. The API key is loaded from .env.
     """
     ### YOUR CODE HERE
-    return None
+    import os
+    try:
+        from langchain_deepseek import ChatDeepSeek
+        llm = ChatDeepSeek(
+            model="deepseek-v4-flash-vision-exp",
+            api_key=os.environ.get("DEEPSEEK_API_KEY"),
+            temperature=0.0,
+        )
+    except (ImportError, Exception):
+        # 兼容备用方案：如果未安装 langchain-deepseek，走标准的 ChatOpenAI 接口调用 DeepSeek
+        from langchain_openai import ChatOpenAI
+        llm = ChatOpenAI(
+            model="deepseek-v4-flash-vision-exp",
+            api_key=os.environ.get("DEEPSEEK_API_KEY"),
+            base_url="https://api.deepseek.com",
+            temperature=0.0,
+        )
+    return llm
 
 
 def answer_queries(chain: Any, images: list[Path]) -> dict[str, Any]:
@@ -79,8 +96,62 @@ def answer_queries(chain: Any, images: list[Path]) -> dict[str, Any]:
     to process independent receipt-extraction prompts in parallel.
     """
     ### YOUR CODE HERE
-    _ = (chain, images)
-    return {QUERY_1: DUMMY_RESPONSE, QUERY_2: DUMMY_RESPONSE}
+    from langchain_core.messages import HumanMessage
+
+    system_instruction = (
+        "You are an expert financial assistant analyzing a supermarket receipt image.\n"
+        "Extract two numbers from this receipt:\n"
+        "1. paid: The final net amount actually paid/charged (OCTOPUS, VISA, CASH, etc., AFTER ROUNDING/抹零).\n"
+        "2. undiscounted: The original amount before discounts. Calculated as: SUBTOTAL plus all discount/promotion/coupon lines added back as positive values. Do NOT add back ROUNDING.\n\n"
+        "Respond ONLY with a valid JSON object in this exact format, with no extra text or markdown:\n"
+        "{\"paid\": 102.30, \"undiscounted\": 107.70}"
+    )
+
+    batch_messages = []
+    for image_path in images:
+        data_url = image_data_url(image_path)
+        message = HumanMessage(
+            content=[
+                {"type": "text", "text": system_instruction},
+                {
+                    "type": "image_url",
+                    "image_url": {"url": data_url},
+                },
+            ]
+        )
+        batch_messages.append([message])
+
+    # 使用 batch 并行/批量处理所有小票图片
+    results = chain.batch(batch_messages)
+
+    total_paid = Decimal("0.00")
+    total_undiscounted = Decimal("0.00")
+
+    for i, res in enumerate(results):
+        content = getattr(res, "content", str(res)).strip()
+        # 清理可能存在的 markdown 代码块标记 ```json ... ```
+        if content.startswith("```"):
+            content = re.sub(r"^```(?:json)?\s*", "", content)
+            content = re.sub(r"\s*```$", "", content)
+
+        try:
+            parsed = json.loads(content)
+            paid_val = Decimal(str(parsed.get("paid", 0))).quantize(Decimal("0.01"))
+            undisc_val = Decimal(str(parsed.get("undiscounted", 0))).quantize(Decimal("0.01"))
+        except Exception:
+            # 如果 json 解析失败，尝试正则提取数字容错
+            amounts = re.findall(r"\d+(?:\.\d+)?", content)
+            paid_val = Decimal(amounts[0]) if amounts else Decimal("0.00")
+            undisc_val = Decimal(amounts[1]) if len(amounts) > 1 else paid_val
+
+        total_paid += paid_val
+        total_undiscounted += undisc_val
+
+    # 必须保证最终返回的字符串只包含一个合法的金额数字，如 "HK$1974.30"
+    return {
+        QUERY_1: f"HK${total_paid:.2f}",
+        QUERY_2: f"HK${total_undiscounted:.2f}",
+    }
 
 
 # Everything below is provided runner/scoring code. No edits are needed.

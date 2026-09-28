@@ -50,4 +50,23 @@ homework runner.
 
 ## Homework 1 solution: 
 > to students: please fill your solution description here.
+### Chain Architecture Visualization
 
+```mermaid
+flowchart TD
+    A[Supermarket Receipt Images] --> B[Data URL Base64 Encoding]
+    B --> C[LangChain Multimodal Message]
+    C --> D[DeepSeek Vision Model: deepseek-v4-flash-vision-exp]
+    D --> E[Batch Structured Extraction: JSON with paid & undiscounted]
+    E --> F[Python High-Precision Accumulation & Summation]
+    F --> G[Formatted Output: HK$XXXX.XX for Query 1 & Query 2]
+```
+
+Solution Description
+My solution implements an end-to-end multimodal extraction and aggregation pipeline built with LangChain and deepseek-v4-flash-vision-exp. Instead of delegating arithmetic summation to the vision-language model across multiple receipts, I adopt a decoupled "extract-then-aggregate" architecture. For each receipt, multimodal messages containing the Base64 data URL and prompt instructions guide the vision backbone to extract two strictly defined financial fields into JSON format: the net settled amount after rounding (paid) and the pre-discount base price (subtotal plus coupons/promotions without rounding). The results are processed concurrently via batch inference, parsed defensively with JSON and regex fallbacks, and aggregated with Python's Decimal arithmetic to eliminate hallucination and rounding errors, producing exact outputs complying with the single-amount formatting requirement.
+
+## Task 2: Reflection
+
+The rapid acceleration of agentic and reasoning AI over the recent period—especially breakthroughs in test-time compute, reasoning-centric models (such as OpenAI o1), and efficient open multimodal architectures like DeepSeek—has fundamentally reshaped my perspective on financial technology and my long-term career planning. 
+
+Previously, I viewed AI in FinTech primarily as an auxiliary analytical tool or specialized OCR pipeline. However, seeing modern vision-language models effortlessly perform zero-shot structured parsing, schema compliance, and document reasoning across noisy receipts has demonstrated that AI agents are transitioning from "assistants" to autonomous "knowledge workers." In quantitative finance and enterprise automation, the bottleneck is no longer raw model capability, but designing verifiable architectures: combining probabilistic neural perception with deterministic symbolic tools (such as Python Decimal arithmetic). Consequently, I am shifting my career focus from training standalone predictive models to mastering Agentic Workflow Engineering—orchestrating compound AI systems that integrate reasoning models with rigorous financial verification protocols.
